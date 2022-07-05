@@ -1,19 +1,24 @@
-let flock;
+document.oncontextmenu = function() { return false; }
+
+let flock, herd;
 
 function setup() {
-  createCanvas(640, 360);
+  createCanvas(1040, 480);
   createP("Drag the mouse to generate new boids.");
-
-  flock = new Flock();
+  herd = new Herd();
+  flock = new Flock(herd);
   // Add an initial set of boids into the system
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 2; i++) {
     let b = new Boid(width / 2,height / 2);
     flock.addBoid(b);
   }
+  //
+  //herd.removeBait(herd.baits[0]);
 }
 
 function draw() {
   background(51);
+  
   flock.run();
 }
 
@@ -22,22 +27,104 @@ function mouseDragged() {
   flock.addBoid(new Boid(mouseX, mouseY));
 }
 
+function mouseClicked(){
+  herd.addBait(new Bait(mouseX, mouseY));
+}
+
 // The Nature of Code
 // Daniel Shiffman
 // http://natureofcode.com
 
+// Food
+function Herd() {
+  // An array for all the baits
+  this.baits = []; // Initialize the array
+  this.ded_buffer = [] // Dead Buffer
+}
+
+Herd.prototype.addBait = function(b) {
+  this.baits.push(b);
+}
+
+Herd.prototype.removeBait = function(b){
+  let i = this.baits.findIndex(e => e == b); 
+  if (i != -1)  
+    this.baits.splice(i, 1);
+}
+
+Herd.prototype.run = function(boids) {
+  for (let i = 0; i < this.baits.length; i++) {
+    this.baits[i].run(boids);  // Passing the entire list of boids to each bait individually
+    if (this.baits[i].isDead()){ // Check if eaten up
+      this.ded_buffer.push(this.baits[i]);
+    }
+  }
+
+  for (let i = 0; i < this.ded_buffer.length; i++) {
+    this.removeBait(this.ded_buffer[i]);
+  }
+
+  if (this.ded_buffer.length > 0) // clear the buffer
+    this.ded_buffer.splice(0, this.ded_buffer.length); 
+}
+
+
+// Bait Object
+// Just sits there, waiting to be eaten.
+
+const INITIAL_HEALTH = 10000;
+const BAIT_RADIUS = 50;
+function Bait(x, y) {
+  this.position = createVector(x, y);
+  this.health = INITIAL_HEALTH;
+  this.r = BAIT_RADIUS;
+}
+
+Bait.prototype.run = function(boids) {
+  this.update(boids);
+  // this.borders();
+  this.render();
+}
+
+Bait.prototype.isTouching = function(dist){
+  return dist <= BAIT_RADIUS;
+}
+
+Bait.prototype.isDead = function(){
+  return this.health <= 0;
+}
+
+Bait.prototype.render = function() {
+  circle(this.position.x, this.position.y, this.r)
+}
+
+Bait.prototype.update = function(boids) {
+  for (let i = 0; i < boids.length; i++){
+    let d = p5.Vector.dist(this.position, boids[i].position);
+    if (this.isTouching(d)){
+      this.health -= 1;
+      this.r -= this.r/INITIAL_HEALTH;
+    }
+  }
+}
+
+
 // Flock object
 // Does very little, simply manages the array of all the boids
 
-function Flock() {
+function Flock(herd) {
   // An array for all the boids
   this.boids = []; // Initialize the array
+  this.herd = herd;
 }
 
 Flock.prototype.run = function() {
+  this.herd.run(this.boids);
   for (let i = 0; i < this.boids.length; i++) {
-    this.boids[i].run(this.boids);  // Passing the entire list of boids to each boid individually
+    
+    this.boids[i].run(this.boids, this.herd.baits);  // Passing the entire list of boids to each boid individually
   }
+  //console.log(this.herd)
 }
 
 Flock.prototype.addBoid = function(b) {
@@ -51,17 +138,18 @@ Flock.prototype.addBoid = function(b) {
 // Boid class
 // Methods for Separation, Cohesion, Alignment added
 
-function Boid(x, y) {
+function Boid(x, y) { // Bat
   this.acceleration = createVector(0, 0);
   this.velocity = createVector(random(-1, 1), random(-1, 1));
   this.position = createVector(x, y);
   this.r = 3.0;
-  this.maxspeed = 3;    // Maximum speed
-  this.maxforce = 0.05; // Maximum steering force
+  this.maxspeed = 15;    // Maximum speed
+  this.maxforce = 0.1; // Maximum steering force
+  this.isWings = false;
 }
 
-Boid.prototype.run = function(boids) {
-  this.flock(boids);
+Boid.prototype.run = function(boids, baits) {
+  this.flock(boids, baits);
   this.update();
   // this.borders();
   this.render();
@@ -73,21 +161,24 @@ Boid.prototype.applyForce = function(force) {
 }
 
 // We accumulate a new acceleration each time based on three rules
-Boid.prototype.flock = function(boids) {
+Boid.prototype.flock = function(boids, baits) {
   let sep = this.separate(boids);   // Separation
   let ali = this.align(boids);      // Alignment
   let coh = this.cohesion(boids);   // Cohesion
-  let avo = this.avoid(boids);      // Avoid walls
+  let avo = this.avoidBorders(boids);      // Avoid walls
+  let att = this.attraction(baits);
   // Arbitrarily weight these forces
-  sep.mult(10.0);
+  sep.mult(12.0);
   ali.mult(2.0);
-  coh.mult(1.0);
-  avo.mult(3.0);
+  coh.mult(3);
+  avo.mult(1.0);
+  att.mult(10);
   // Add the force vectors to acceleration
   this.applyForce(sep);
   this.applyForce(ali);
   this.applyForce(coh);
   this.applyForce(avo);
+  this.applyForce(att);
 }
 
 // Method to update location
@@ -99,6 +190,7 @@ Boid.prototype.update = function() {
   this.position.add(this.velocity);
   // Reset accelertion to 0 each cycle
   this.acceleration.mult(0);
+
 }
 
 // A method that calculates and applies a steering force towards a target
@@ -114,6 +206,73 @@ Boid.prototype.seek = function(target) {
   return steer;
 }
 
+let WINGSPAN = 32;
+let LENGTH = WINGSPAN/2;
+
+let BODY_WIDTH = WINGSPAN/8;
+let WING_SEC = (WINGSPAN - BODY_WIDTH)/4
+
+let top_y = [LENGTH*5/16, LENGTH*5/32, LENGTH/4]
+let bot_y = [LENGTH*15/32, LENGTH*3/8, LENGTH*5/16]
+
+
+let x = 0;
+let y = 0; 
+let cx = 0;
+let cy = 0;
+function flight(p){
+  noStroke();
+  fill(0);
+    beginShape();
+    x = -WINGSPAN/2;
+    y = 0;
+    for (let i = 0; i < 6; i++){
+      if (i == 3) x += BODY_WIDTH;
+      else if (i > 0) x += WING_SEC;
+
+      if (i < 3) y = top_y[2-i];
+      else y = top_y[i - 3];
+
+      vertex(x, y)
+
+      if (i == 2){
+        vertex(x+BODY_WIDTH/6, top_y[2]);
+        bezierVertex(x + BODY_WIDTH/3, y, x + BODY_WIDTH*2/3, y,x + BODY_WIDTH*5/6, LENGTH/4);
+      }
+    }
+    x = -WINGSPAN/2;
+    bezierVertex(x+WINGSPAN - WING_SEC, top_y[0], x+WINGSPAN - 2*WING_SEC, top_y[0]*2, x+WINGSPAN - 2*WING_SEC, LENGTH*3/4)
+    bezierVertex(x+WINGSPAN - 2*WING_SEC, top_y[0]*2, x+2*WING_SEC, top_y[0]*2, x+2*WING_SEC, LENGTH*3/4)
+    bezierVertex(x+2*WING_SEC, top_y[0]*2, x+WING_SEC, top_y[0], x, top_y[2])
+    endShape(CLOSE);
+}
+
+
+function idle(p){
+    x = 2 * WING_SEC;
+    y = top_y[0];
+    fill(0);
+    noStroke();
+    beginShape();
+
+    // top
+    if (p == 1) vertex(WING_SEC, top_y[0]/2);
+    vertex(2*WING_SEC, top_y[0]);
+    vertex(x+BODY_WIDTH/6, LENGTH/4);
+    bezierVertex(x + BODY_WIDTH/3, y, x + BODY_WIDTH*2/3, y,x + BODY_WIDTH*5/6, LENGTH/4);
+    vertex(x+BODY_WIDTH, y);
+    if (p == 1) vertex(WINGSPAN - WING_SEC, top_y[0]/2);
+
+    // bottom
+    y = LENGTH*3/4;
+    vertex(x+BODY_WIDTH, y);
+    bezierVertex(WINGSPAN - 2*WING_SEC, top_y[0]*2, 2*WING_SEC, top_y[0]*2, 2*WING_SEC, LENGTH*3/4)
+
+    endShape(CLOSE);
+}
+
+
+
 Boid.prototype.render = function() {
   // Draw a triangle rotated in the direction of velocity
   let theta = this.velocity.heading() + radians(90);
@@ -122,11 +281,13 @@ Boid.prototype.render = function() {
   push();
   translate(this.position.x, this.position.y);
   rotate(theta);
-  beginShape();
-  vertex(0, -this.r * 2);
-  vertex(-this.r, this.r * 2);
-  vertex(this.r, this.r * 2);
-  endShape(CLOSE);
+  flight();
+  // beginShape();
+  // vertex(0, -this.r * 2);
+  // circle(0, -this.r*2, 4)
+  // vertex(-this.r, this.r * 2);
+  // vertex(this.r, this.r * 2);
+  // endShape(CLOSE);
   pop();
 }
 
@@ -141,7 +302,7 @@ Boid.prototype.borders = function() {
 // Separation
 // Method checks for nearby boids and steers away
 Boid.prototype.separate = function(boids) {
-  let desiredseparation = 25.0;
+  let desiredseparation = WINGSPAN;
   let steer = createVector(0, 0);
   let count = 0;
   // For every boid in the system, check if it's too close
@@ -219,19 +380,40 @@ Boid.prototype.cohesion = function(boids) {
   }
 }
 
-Boid.prototype.avoid = function(boids) {
+Boid.prototype.avoidBorders = function(boids) {
   let steer = createVector(0, 0);
-  if (this.position.x <= 0) {
-    steer.add(createVector(1, 0));
+  if (this.position.x <= 100) {
+    steer.add(createVector(0.5, 0));
   }
-  if (this.position.x > 640) { // width of canvas
-    steer.add(createVector(-1, 0));
+  if (this.position.x >width -100) { // width of canvas
+    steer.add(createVector(-0.5, 0));
   }
-  if (this.position.y <= 0) {
-    steer.add(createVector(0, 1));
+  if (this.position.y <= 100) {
+    steer.add(createVector(0, 0.5));
   }
-  if (this.position.y > 360) { // height of canvas
-    steer.add(createVector(0, -1));
+  if (this.position.y > height -100) { // height of canvas
+    steer.add(createVector(0, -0.5));
   }
+
   return steer;
+}
+
+// Attraction
+// Steer towards the nearest bait.
+Boid.prototype.attraction = function(baits) {
+  let neighbordist = 200;
+  let sum = createVector(0, 0);   // Start with empty vector to store nearest location
+  let curr_d = width*2;
+  for (let i = 0; i < baits.length; i++) {
+    let d = p5.Vector.dist(this.position,baits[i].position);
+    if ((d > 0) && (d < neighbordist) && (d < curr_d)) {
+      sum = baits[i].position; // Add location
+      curr_d = d;
+    }
+  }
+  if (curr_d < width*2) {
+    return this.seek(sum);  // Steer towards the location
+  } else {
+    return createVector(0, 0);
+  }
 }
