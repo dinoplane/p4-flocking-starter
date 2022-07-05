@@ -121,101 +121,80 @@ class Bait {
 // Cave object
 // Kinda like the bait... but houses the bats. Is basically a queue
 
-function Cave(x, y, w, h) {
-  this.position = createVector(x, y); // Top Left
-  this.w = w;
-  this.h = h;
-  this.housed = [];
-  this.ded_buffer = [];
-}
+class Cave extends Group{
+  constructor(x, y, w, h) {
+    super();
+    this.position = createVector(x, y); // Top Left
+    this.w = w;
+    this.h = h;
+  }
 
-Cave.prototype.run = function() {
-  this.render();
-}
+  run() {
+    this.render();
+  }
 
-Cave.prototype.isTouching = function(boid){
-  return this.position.x <= boid.position.x < this.position.x + this.w &&
-          this.position.y <= boid.position.y < this.position.y + this.h;
-}
+  isTouching(boid){
+    return this.position.x <= boid.position.x < this.position.x + this.w &&
+            this.position.y <= boid.position.y < this.position.y + this.h;
+  }
 
-Cave.prototype.addBoid = function(b) {
-  this.housed.push(b);
-}
+  render() {
+    rect(this.position.x, this.position.y, this.w, this.h)
+  }
 
-Cave.prototype.removeBoid = function(b){
-  let i = this.housed.findIndex(e => e == b); 
-  if (i != -1)  
-    this.housed.splice(i, 1);
-}
-
-
-Cave.prototype.render = function() {
-  rect(this.position.x, this.position.y, this.w, this.h)
-}
-
-Cave.prototype.update = function(boids) {
-  for (let i = 0; i < boids.length; i++){
-    if (this.isTouching(boids[i]) && i.isSleepy()){ // Go sleep if sleepy
-      boids[i].isSleeping = true;
+  update(boids) {
+    for (let i = 0; i < boids.length; i++){
+      if (this.isTouching(boids[i]) && i.isSleepy()){ // Go sleep if sleepy
+        boids[i].isSleeping = true;
+      }
     }
   }
+
 }
-
-
 
 // Flock object
 // Does very little, simply manages the array of all the boids
 
-function Flock(herd, cave) {
-  // An array for all the boids
-  this.boids = []; // Initialize the array
-  this.ded_buffer = [];
-  this.herd = herd;
-  this.cave = cave;
-}
+class Flock{
+  constructor(herd, cave) {
+    // An array for all the boids
+    super();
+    this.herd = herd;
+    this.cave = cave;
+  }
 
-Flock.prototype.run = function() {
-  this.herd.run(this.boids);
-  for (let i = 0; i < this.boids.length; i++) {
-    this.boids[i].run(this.boids, this.herd.baits);  // Passing the entire list of boids to each boid individually
-    if (this.boids[i].isDead() || this.boids[i].isSleeping){ // Check if dead or sleeping
-      this.ded_buffer.push(this.boids[i]);
+  run() {
+    this.herd.run(this.boids);
+    for (let i = 0; i < this.boids.length; i++) {
+      this.boids[i].run(this.boids, this.herd.baits);  // Passing the entire list of boids to each boid individually
+      if (this.boids[i].isDead() || this.boids[i].isSleeping){ // Check if dead or sleeping
+        this.ded_buffer.push(this.boids[i]);
+      }
     }
-  }
 
-  for (let i = 0; i < this.ded_buffer.length; i++) {
-    this.removeBoid(this.ded_buffer[i]);
-  }
-
-  if (this.ded_buffer.length > 0) // clear the buffer
-    this.ded_buffer.splice(0, this.ded_buffer.length); 
-
-  for (let i = 0; i < this.cave.boids; i++){
-    if (this.cave.boids[i].isHungry()){ // Check if on the hunt
-        this.addBoid(this.cave.boids[i]);
-        this.cave.ded_buffer.push(this.cave.boids[i]);
+    for (let i = 0; i < this.ded_buffer.length; i++) {
+      this.removeBoid(this.ded_buffer[i]);
     }
+
+    if (this.ded_buffer.length > 0) // clear the buffer
+      this.ded_buffer.splice(0, this.ded_buffer.length); 
+
+    for (let i = 0; i < this.cave.boids; i++){
+      if (this.cave.boids[i].isHungry()){ // Check if on the hunt
+          this.addBoid(this.cave.boids[i]);
+          this.cave.ded_buffer.push(this.cave.boids[i]);
+      }
+    }
+
+    for (let i = 0; i < this.cave.ded_buffer.length; i++) {
+      this.removeBoid(this.cave.ded_buffer[i]);
+    }
+
+    if (this.cave.ded_buffer.length > 0) // clear the buffer
+      this.cave.ded_buffer.splice(0, this.cave.ded_buffer.length); 
+
   }
-
-  for (let i = 0; i < this.cave.ded_buffer.length; i++) {
-    this.removeBoid(this.cave.ded_buffer[i]);
-  }
-
-  if (this.cave.ded_buffer.length > 0) // clear the buffer
-    this.cave.ded_buffer.splice(0, this.cave.ded_buffer.length); 
-
-}
   //console.log(this.herd)
-
-
-Flock.prototype.addBoid = function(b) {
-  this.boids.push(b);
-}
-
-Flock.prototype.removeBoid = function(b){
-  let i = this.boids.findIndex(e => e == b); 
-  if (i != -1)  
-    this.boids.splice(i, 1);
 }
 
 // The Nature of Code
