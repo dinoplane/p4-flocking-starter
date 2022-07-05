@@ -6,11 +6,11 @@ function setup() {
   createCanvas(1040, 480);
   createP("Drag the mouse to generate new boids.");
   herd = new Herd();
+  cave = new Cave(0, 0, );
   flock = new Flock(herd);
   // Add an initial set of boids into the system
-  for (let i = 0; i < 2; i++) {
-    let b = new Boid(width / 2,height / 2);
-    flock.addBoid(b);
+  for (let i = 0; i < 30; i++) {
+    let b = new Boid(width / 2,height / 2);    flock.addBoid(b);
   }
   //
   //herd.removeBait(herd.baits[0]);
@@ -28,6 +28,8 @@ function mouseDragged() {
 }
 
 function mouseClicked(){
+  if (mouseX > 0 && mouseX < width &&
+      mouseY > 0 && mouseY < height)
   herd.addBait(new Bait(mouseX, mouseY));
 }
 
@@ -104,9 +106,44 @@ Bait.prototype.update = function(boids) {
     if (this.isTouching(d)){
       this.health -= 1;
       this.r -= this.r/INITIAL_HEALTH;
+      boids[i].hunger += 1;
     }
   }
 }
+
+// Cave object
+// Kinda like the bait... but houses the bats.
+
+function Cave(x, y, w, h) {
+  this.position = createVector(x, y); // Top Left
+  this.w = w;
+  this.h = h
+}
+
+Cave.prototype.run = function(boids) {
+  this.update(boids);
+  // this.borders();
+  this.render();
+}
+
+Cave.prototype.isTouching = function(boid){
+  return this.position.x <= boid.position.x < this.position.x + this.w &&
+          this.position.y <= boid.position.y < this.position.y + this.h;
+}
+
+
+Cave.prototype.render = function() {
+  rect(this.position.x, this.position.y, this.w, this.h)
+}
+
+Cave.prototype.update = function(boids) {
+  for (let i = 0; i < boids.length; i++){
+    if (this.isTouching(boids[i])){
+
+    }
+  }
+}
+
 
 
 // Flock object
@@ -115,7 +152,9 @@ Bait.prototype.update = function(boids) {
 function Flock(herd) {
   // An array for all the boids
   this.boids = []; // Initialize the array
+  this.ded_buffer = [];
   this.herd = herd;
+  this.cave = cave;
 }
 
 Flock.prototype.run = function() {
@@ -123,12 +162,29 @@ Flock.prototype.run = function() {
   for (let i = 0; i < this.boids.length; i++) {
     
     this.boids[i].run(this.boids, this.herd.baits);  // Passing the entire list of boids to each boid individually
+    if (this.boids[i].isDead()){ // Check if hungry
+      this.ded_buffer.push(this.boids[i]);
+    }
+
+    for (let i = 0; i < this.ded_buffer.length; i++) {
+      this.removeBoid(this.ded_buffer[i]);
+    }
+  
+    if (this.ded_buffer.length > 0) // clear the buffer
+      this.ded_buffer.splice(0, this.ded_buffer.length); 
   }
+
   //console.log(this.herd)
 }
 
 Flock.prototype.addBoid = function(b) {
   this.boids.push(b);
+}
+
+Flock.prototype.removeBoid = function(b){
+  let i = this.boids.findIndex(e => e == b); 
+  if (i != -1)  
+    this.boids.splice(i, 1);
 }
 
 // The Nature of Code
@@ -145,7 +201,20 @@ function Boid(x, y) { // Bat
   this.r = 3.0;
   this.maxspeed = 15;    // Maximum speed
   this.maxforce = 0.1; // Maximum steering force
-  this.isWings = false;
+  this.flap = floor(random(0, 6));
+  this.hunger = floor(random(0, 99));
+}
+
+Boid.prototype.isSleepy = function(){
+  return this.hunger > 50;
+}
+
+Boid.prototype.isHungry = function(){
+  return this.hunger < 25;
+}
+
+Boid.prototype.isDead = function(){
+  return this.hunger <= 0;
 }
 
 Boid.prototype.run = function(boids, baits) {
@@ -190,7 +259,8 @@ Boid.prototype.update = function() {
   this.position.add(this.velocity);
   // Reset accelertion to 0 each cycle
   this.acceleration.mult(0);
-
+  if (frameCount % 45 == 0) this.hunger -= 1; 
+  
 }
 
 // A method that calculates and applies a steering force towards a target
@@ -220,59 +290,60 @@ let x = 0;
 let y = 0; 
 let cx = 0;
 let cy = 0;
+let s = -WINGSPAN/2;
 function flight(p){
-  noStroke();
   fill(0);
-    beginShape();
-    x = -WINGSPAN/2;
-    y = 0;
-    for (let i = 0; i < 6; i++){
-      if (i == 3) x += BODY_WIDTH;
-      else if (i > 0) x += WING_SEC;
+  noStroke();
+  beginShape();
+  x = s;
+  y = 0;
+  for (let i = 0; i < 6; i++){
+    if (i == 3) x += BODY_WIDTH;
+    else if (i > 0) x += WING_SEC;
 
-      if (i < 3) y = top_y[2-i];
-      else y = top_y[i - 3];
-
-      vertex(x, y)
-
-      if (i == 2){
-        vertex(x+BODY_WIDTH/6, top_y[2]);
-        bezierVertex(x + BODY_WIDTH/3, y, x + BODY_WIDTH*2/3, y,x + BODY_WIDTH*5/6, LENGTH/4);
-      }
+    if (i < 3) y = top_y[2-i];
+    else y = top_y[i - 3];
+    
+    vertex(x, y)
+    if (i == 2){
+      vertex(x+BODY_WIDTH/6, top_y[2]);
+      bezierVertex(x + BODY_WIDTH/3, y, x + BODY_WIDTH*2/3, y,x + BODY_WIDTH*5/6, LENGTH/4);
     }
-    x = -WINGSPAN/2;
-    bezierVertex(x+WINGSPAN - WING_SEC, top_y[0], x+WINGSPAN - 2*WING_SEC, top_y[0]*2, x+WINGSPAN - 2*WING_SEC, LENGTH*3/4)
-    bezierVertex(x+WINGSPAN - 2*WING_SEC, top_y[0]*2, x+2*WING_SEC, top_y[0]*2, x+2*WING_SEC, LENGTH*3/4)
-    bezierVertex(x+2*WING_SEC, top_y[0]*2, x+WING_SEC, top_y[0], x, top_y[2])
-    endShape(CLOSE);
+  }
+  x = s;
+  bezierVertex(x+WINGSPAN - WING_SEC, top_y[0], x+WINGSPAN - 2*WING_SEC, top_y[0]*2, x+WINGSPAN - 2*WING_SEC, LENGTH*3/4)
+  bezierVertex(x+WINGSPAN - 2*WING_SEC, top_y[0]*2, x+2*WING_SEC, top_y[0]*2, x+2*WING_SEC, LENGTH*3/4);
+  bezierVertex(x+2*WING_SEC, top_y[0]*2, x+WING_SEC, top_y[0], x, top_y[2]);
+  endShape(CLOSE);
 }
 
 
 function idle(p){
-    x = 2 * WING_SEC;
-    y = top_y[0];
-    fill(0);
-    noStroke();
-    beginShape();
+    
+  x = 2 * WING_SEC+s;
+  y = top_y[0];
+  fill(0);
+  noStroke();
+  beginShape();
 
-    // top
-    if (p == 1) vertex(WING_SEC, top_y[0]/2);
-    vertex(2*WING_SEC, top_y[0]);
-    vertex(x+BODY_WIDTH/6, LENGTH/4);
-    bezierVertex(x + BODY_WIDTH/3, y, x + BODY_WIDTH*2/3, y,x + BODY_WIDTH*5/6, LENGTH/4);
-    vertex(x+BODY_WIDTH, y);
-    if (p == 1) vertex(WINGSPAN - WING_SEC, top_y[0]/2);
+  // top
+  if (p == 1) vertex(x - WING_SEC, top_y[0]/2);
+  vertex(x, top_y[0]);
+  vertex(x + BODY_WIDTH/6, LENGTH/4);
+  bezierVertex(x + BODY_WIDTH/3, y, x + BODY_WIDTH*2/3, y,x + BODY_WIDTH*5/6, LENGTH/4);
+  vertex(x+BODY_WIDTH, y);
+  if (p == 1) vertex(x + BODY_WIDTH + WING_SEC, top_y[0]/2);
 
-    // bottom
-    y = LENGTH*3/4;
-    vertex(x+BODY_WIDTH, y);
-    bezierVertex(WINGSPAN - 2*WING_SEC, top_y[0]*2, 2*WING_SEC, top_y[0]*2, 2*WING_SEC, LENGTH*3/4)
+  // bottom
+  y = LENGTH*3/4;
+  vertex(x + BODY_WIDTH, y);
+  bezierVertex(x + BODY_WIDTH, top_y[0]*2, x, top_y[0]*2, x, LENGTH*3/4)
 
-    endShape(CLOSE);
+  endShape(CLOSE);
 }
 
 
-
+let cycle = [idle, idle, flight];
 Boid.prototype.render = function() {
   // Draw a triangle rotated in the direction of velocity
   let theta = this.velocity.heading() + radians(90);
@@ -281,13 +352,12 @@ Boid.prototype.render = function() {
   push();
   translate(this.position.x, this.position.y);
   rotate(theta);
-  flight();
-  // beginShape();
-  // vertex(0, -this.r * 2);
-  // circle(0, -this.r*2, 4)
-  // vertex(-this.r, this.r * 2);
-  // vertex(this.r, this.r * 2);
-  // endShape(CLOSE);
+  if (this.flap < cycle.length){
+    cycle[this.flap](this.flap);
+  } else {
+    cycle[(cycle.length*2 - 1) - this.flap]((cycle.length*2 - 1) - this.flap);
+  }
+   this.flap = (this.flap + 1) % (cycle.length*2);
   pop();
 }
 
