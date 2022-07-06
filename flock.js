@@ -197,25 +197,7 @@ class Cave extends Group{
         }
       }
     }
-    // console.log(this.boids.length)
-
-    // for (let i = 0; i < this.boids.length; i++){
-      
-    //   this.boids[i].update();
-    //   
-        
-    //     console.log("Initial: ", flock.boids.length)
-    //     this.boids[i].isSleeping = false;
-    //     this.ded_buffer.push(this.boids[i]);
-    //     flock.boids.push(this.boids[i]); // Can i do this???
-    //     console.log(this.boids[i].isSleeping)
-    //     console.log("Ending:", flock.boids.length)
-    //   }
-    // }
-
-    // this.garbageCollect();
   }
-
 }
 
 // Flock object
@@ -306,7 +288,7 @@ Boid.prototype.flock = function(boids, baits, caves) {
   // Arbitrarily weight these forces
   sep.mult(12.0);
   ali.mult(2.0);
-  coh.mult(3);
+  coh.mult(3.0);
   avo.mult(1.0);
   att.mult(10);
   // Add the force vectors to acceleration
