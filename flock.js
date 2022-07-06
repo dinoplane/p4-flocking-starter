@@ -4,33 +4,38 @@ let flock, herd;
 
 function setup() {
   createCanvas(1040, 480);
-  createP("Drag the mouse to generate new boids.");
+  createP("Click and drag the left mouse key to generate new bats.");
+  createP("Click right mouse key to create blood pools.");
   herd = new Group();
-  cave = new Cave(0, 0, 100, 100);
-  flock = new Flock(herd, cave);
+  caves = new Group();
+  caves.addBoid(new Cave(random(50, width -50), random(50, height - 50), 100, 100));
+  
+  flock = new Flock(herd, caves);
   // Add an initial set of boids into the system
-  for (let i = 0; i < 30; i++) {
-    let b = new Boid(width / 2,height / 2);    flock.addBoid(b);
+  for (let i = 0; i < 1; i++) {
+    let b = new Boid(width / 2,height / 2);    
+    flock.addBoid(b);
   }
-  //
-  //herd.removeBait(herd.baits[0]);
 }
 
 function draw() {
-  background(51);
+  background('tan');
   
   flock.run();
 }
 
 // Add a new boid into the System
 function mouseDragged() {
-  flock.addBoid(new Boid(mouseX, mouseY));
+  if (mouseButton == LEFT)
+    flock.addBoid(new Boid(mouseX, mouseY));
 }
 
-function mouseClicked(){
-  if (mouseX > 0 && mouseX < width &&
-      mouseY > 0 && mouseY < height)
-  herd.addBait(new Bait(mouseX, mouseY));
+function mousePressed(){
+  if (mouseButton == RIGHT){
+    if (mouseX > 0 && mouseX < width &&
+        mouseY > 0 && mouseY < height)
+      herd.addBoid(new Bait(mouseX, mouseY));
+  }
 }
 
 // The Nature of Code
@@ -49,8 +54,7 @@ class Group{
     this.boids.push(b);
   }
 
-  removeBoid(b){
-    let i = this.boids.findIndex(e => e == b); 
+  removeBoid(i){
     if (i != -1)  
       this.boids.splice(i, 1);
   }
@@ -59,7 +63,7 @@ class Group{
     for (let i = 0; i < this.boids.length; i++) {
       this.boids[i].run(boids);  // Passing the entire list of boids to each bait individually
       if (this.boids[i].isDead()){ // Check if eaten up
-        this.ded_buffer.push(this.boids[i]);
+        this.ded_buffer.push(i);
       }
     }
 
@@ -79,13 +83,24 @@ class Group{
 // Bait Object
 // Just sits there, waiting to be eaten.
 
-const INITIAL_HEALTH = 10000;
+const INITIAL_HEALTH = 5000;
 const BAIT_RADIUS = 50;
 class Bait {
   constructor(x, y){
     this.position = createVector(x, y);
     this.health = INITIAL_HEALTH;
     this.r = BAIT_RADIUS;
+    this.sx = [];
+    this.sy = [];
+    this.sr = [];
+
+
+    let n = floor(random(3));
+    for (let i = 0; i < n; i++){
+      this.sx.push(random(this.position.x - this.r, this.position.x + this.r));
+      this.sy.push(random(this.position.y - this.r, this.position.y + this.r));
+      this.sr.push(random(10, BAIT_RADIUS));
+    }
   }
 
   run(boids) {
@@ -103,7 +118,14 @@ class Bait {
   }
 
   render(){
-    circle(this.position.x, this.position.y, this.r)
+    push();
+    noStroke();
+    fill('#C70039');
+    for (let i = 0; i < this.sx.length; i++){
+      circle(this.sx[i], this.sy[i], this.sr[i]);
+    }
+    circle(this.position.x, this.position.y, this.r);
+    pop();
   }
 
   update(boids){
@@ -112,42 +134,86 @@ class Bait {
       if (this.isTouching(d)){
         this.health -= 1;
         this.r -= this.r/INITIAL_HEALTH;
-        boids[i].hunger += 1;
+        for (let i = 0; i < this.sr.length; i++){
+          this.sr[i] -= this.sr[i]/INITIAL_HEALTH;
+        }
+        if (frameCount % 3 == 0) boids[i].hunger += 1;
       }
     }
   }
 }
 
-// Cave object
+// Cave object (ITS A BAT HOUSE NOW)
 // Kinda like the bait... but houses the bats. Is basically a queue
 
 class Cave extends Group{
   constructor(x, y, w, h) {
     super();
-    this.position = createVector(x, y); // Top Left
+    this.position = createVector(x, y); // Center
     this.w = w;
     this.h = h;
   }
 
-  run() {
-    this.render();
-  }
 
   isTouching(boid){
-    return this.position.x <= boid.position.x < this.position.x + this.w &&
-            this.position.y <= boid.position.y < this.position.y + this.h;
+    return (this.position.x -this.w/2) < boid.position.x && boid.position.x < (this.position.x + this.w/2) &&
+            (this.position.y -this.h/2) < boid.position.y && boid.position.y < (this.position.y + this.h/2);
   }
 
   render() {
-    rect(this.position.x, this.position.y, this.w, this.h)
+    push();
+    noStroke();
+    fill('#777777');
+    
+    let s = this.w/10;
+    let sx = this.position.x - this.w/2;
+    rect(this.position.x - this.w/2, this.position.y - this.h/2, this.w, this.h/2);
+    fill('#999999');
+    rect(this.position.x - this.w/2, this.position.y, this.w, this.h/2);
+    
+    
+    stroke("#AAAAAA");
+    for (let i = 0; i < 9; i++){
+      sx += s;
+      line(sx, this.position.y - this.h/2, sx, this.position.y + this.h/2);
+    }
+  
+
+
+
+    pop();
   }
 
-  update(boids) {
-    for (let i = 0; i < boids.length; i++){
-      if (this.isTouching(boids[i]) && i.isSleepy()){ // Go sleep if sleepy
-        boids[i].isSleeping = true;
+  run(boids) {
+    for (let i = 0; i < boids.length; i++){ // AInt work... looks weird....
+      //console.log(this.isTouching(boids[i]));
+      if (this.isTouching(boids[i])){ 
+        if (boids[i].isSleepy()){ // Go sleep if sleepy
+          boids[i].isSleeping = true;
+          boids[i].velocity.mult(0.1);
+          //this.boids.push(boids[i]);
+        } else {
+          boids[i].isSleeping = false;
+        }
       }
     }
+    // console.log(this.boids.length)
+
+    // for (let i = 0; i < this.boids.length; i++){
+      
+    //   this.boids[i].update();
+    //   
+        
+    //     console.log("Initial: ", flock.boids.length)
+    //     this.boids[i].isSleeping = false;
+    //     this.ded_buffer.push(this.boids[i]);
+    //     flock.boids.push(this.boids[i]); // Can i do this???
+    //     console.log(this.boids[i].isSleeping)
+    //     console.log("Ending:", flock.boids.length)
+    //   }
+    // }
+
+    // this.garbageCollect();
   }
 
 }
@@ -155,46 +221,36 @@ class Cave extends Group{
 // Flock object
 // Does very little, simply manages the array of all the boids
 
-class Flock{
-  constructor(herd, cave) {
+class Flock extends Group{
+  constructor(herd, caves) {
     // An array for all the boids
     super();
     this.herd = herd;
-    this.cave = cave;
+    this.caves = caves;
   }
 
   run() {
     this.herd.run(this.boids);
+
+    for (let c of this.caves.boids){
+      c.run(this.boids);
+    }
+    
     for (let i = 0; i < this.boids.length; i++) {
-      this.boids[i].run(this.boids, this.herd.baits);  // Passing the entire list of boids to each boid individually
-      if (this.boids[i].isDead() || this.boids[i].isSleeping){ // Check if dead or sleeping
+
+      this.boids[i].run(this.boids, this.herd.boids, this.caves.boids);  // Passing the entire list of boids to each boid individually
+      if (this.boids[i].isDead()){ // Check if dead
         this.ded_buffer.push(this.boids[i]);
       }
     }
 
-    for (let i = 0; i < this.ded_buffer.length; i++) {
-      this.removeBoid(this.ded_buffer[i]);
+    this.garbageCollect();
+    
+    for (let c of this.caves.boids){
+      c.render(this.boids);
     }
-
-    if (this.ded_buffer.length > 0) // clear the buffer
-      this.ded_buffer.splice(0, this.ded_buffer.length); 
-
-    for (let i = 0; i < this.cave.boids; i++){
-      if (this.cave.boids[i].isHungry()){ // Check if on the hunt
-          this.addBoid(this.cave.boids[i]);
-          this.cave.ded_buffer.push(this.cave.boids[i]);
-      }
-    }
-
-    for (let i = 0; i < this.cave.ded_buffer.length; i++) {
-      this.removeBoid(this.cave.ded_buffer[i]);
-    }
-
-    if (this.cave.ded_buffer.length > 0) // clear the buffer
-      this.cave.ded_buffer.splice(0, this.cave.ded_buffer.length); 
 
   }
-  //console.log(this.herd)
 }
 
 // The Nature of Code
@@ -217,22 +273,22 @@ function Boid(x, y) { // Bat
 }
 
 Boid.prototype.isSleepy = function(){
-  return this.hunger > 50;
+  return this.hunger > 75;
 }
 
-Boid.prototype.isHungry = function(){
-  return this.hunger < 25;
-}
+// Boid.prototype.isHungry = function(){
+//   return this.hunger < 55;
+// }
 
 Boid.prototype.isDead = function(){
   return this.hunger <= 0;
 }
 
-Boid.prototype.run = function(boids, baits) {
-  this.flock(boids, baits);
-  this.update();
-  // this.borders();
+Boid.prototype.run = function(boids, baits, caves) {
+  this.flock(boids, baits, caves); 
   this.render();
+
+  this.update();
 }
 
 Boid.prototype.applyForce = function(force) {
@@ -241,12 +297,12 @@ Boid.prototype.applyForce = function(force) {
 }
 
 // We accumulate a new acceleration each time based on three rules
-Boid.prototype.flock = function(boids, baits) {
+Boid.prototype.flock = function(boids, baits, caves) {
   let sep = this.separate(boids);   // Separation
   let ali = this.align(boids);      // Alignment
   let coh = this.cohesion(boids);   // Cohesion
   let avo = this.avoidBorders(boids);      // Avoid walls
-  let att = this.attraction(baits);
+  let att = (this.isSleepy()) ? this.attraction(caves) : this.attraction(baits); // Full bats go back to roost in cave
   // Arbitrarily weight these forces
   sep.mult(12.0);
   ali.mult(2.0);
@@ -263,17 +319,17 @@ Boid.prototype.flock = function(boids, baits) {
 
 // Method to update location
 Boid.prototype.update = function() {
-  // Update velocity
-  this.velocity.add(this.acceleration);
-  // Limit speed
-  this.velocity.limit(this.maxspeed);
-  this.position.add(this.velocity);
-  // Reset accelertion to 0 each cycle
-  this.acceleration.mult(0);
-  if (frameCount % 2 == 0) this.hunger -= 1; 
-
-
   
+    //console.log(this.velocity)
+    // Update velocity
+    this.velocity.add(this.acceleration);
+    // Limit speed
+    this.velocity.limit(this.maxspeed);
+    this.position.add(this.velocity);
+    // Reset accelertion to 0 each cycle
+    this.acceleration.mult(0);
+  
+  if (frameCount % 20 == 0) this.hunger -= 1; 
 }
 
 // A method that calculates and applies a steering force towards a target
@@ -332,10 +388,10 @@ function flight(p){
 
 
 function idle(p){
-    
+  fill(0);
   x = 2 * WING_SEC+s;
   y = top_y[0];
-  fill(0);
+  
   noStroke();
   beginShape();
 
@@ -365,13 +421,19 @@ Boid.prototype.render = function() {
   push();
   translate(this.position.x, this.position.y);
   rotate(theta);
-  if (this.flap < cycle.length){
-    cycle[this.flap](this.flap);
-  } else {
-    cycle[(cycle.length*2 - 1) - this.flap]((cycle.length*2 - 1) - this.flap);
+  if (!this.isSleeping){
+    if (this.flap < cycle.length){
+      cycle[this.flap](this.flap);
+    } else {
+      cycle[(cycle.length*2 - 1) - this.flap]((cycle.length*2 - 1) - this.flap);
+    }
+    this.flap = (this.flap + 1) % (cycle.length*2);
+  }else {
+    rotate(90);
+    idle(0);
   }
-   this.flap = (this.flap + 1) % (cycle.length*2);
   pop();
+
 }
 
 // Wraparound
@@ -484,7 +546,7 @@ Boid.prototype.avoidBorders = function(boids) {
 // Attraction
 // Steer towards the nearest bait.
 Boid.prototype.attraction = function(baits) {
-  let neighbordist = 200;
+  let neighbordist = (this.isSleepy()) ? width/2 : 200; // Go home if sleepy. Otherwise, hunt.
   let sum = createVector(0, 0);   // Start with empty vector to store nearest location
   let curr_d = width*2;
   for (let i = 0; i < baits.length; i++) {
